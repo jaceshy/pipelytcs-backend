@@ -9,10 +9,10 @@ class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('platforms')->get();
+        $products = Product::with(['platforms', 'salesData'])->get();
 
         return response()->json([
-            'message' => 'Product data fetched successfully',
+            'message' => 'Products retrieved successfully',
             'data' => $products
         ]);
     }

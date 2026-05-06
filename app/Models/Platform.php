@@ -8,15 +8,22 @@ class Platform extends Model
 {
     protected $table = 'platforms';
 
-    protected $guarded = [];
+    protected $fillable = [
+        'nama',
+    ];
 
     public function products()
     {
-        return $this->belongsToMany(Product::class, 'product_platform');
+        return $this->belongsToMany(
+            Product::class,
+            'product_platform',
+            'platform_id',
+            'product_id'
+        );
     }
 
     public function salesData()
     {
-        return $this->hasMany(SaleData::class);
+        return $this->hasMany(SaleData::class, 'platform_id');
     }
 }
