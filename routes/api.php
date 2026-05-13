@@ -1,8 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\DB;
-
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\PlatformController;
@@ -25,7 +23,7 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/dashboard', [DashboardController::class, 'index']);
 
-Route::get('/products', [ProductController::class, 'index']);
+Route::apiResource('products', ProductController::class);
 
 Route::get('/platforms', [PlatformController::class, 'index']);
 Route::get('/platforms/{id}', [PlatformController::class, 'show']);

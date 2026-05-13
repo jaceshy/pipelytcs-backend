@@ -8,6 +8,8 @@ class SaleData extends Model
 {
     protected $table = 'sales_data';
 
+    public $timestamps = false;
+
     protected $fillable = [
         'product_id',
         'platform_id',
