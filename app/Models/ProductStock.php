@@ -4,20 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class SaleData extends Model
+class ProductStock extends Model
 {
-    protected $table = 'sales_data';
-
-    public $timestamps = false;
+    protected $table = 'product_stock';
 
     protected $fillable = [
-        'buyer_email',
         'product_id',
         'platform_id',
-        'tanggal',
-        'units_sold',
-        'price',
-        'revenue',
+        'stock',
+        'minimum_stock',
     ];
 
     public function product()

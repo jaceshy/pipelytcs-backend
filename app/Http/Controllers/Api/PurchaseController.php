@@ -4,14 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
-use App\Models\SalesData;
 use App\Models\ProductStock;
+use App\Models\SaleData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseController extends Controller
 {
-    // POST: add purchase
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -28,30 +27,39 @@ class PurchaseController extends Controller
         try {
             $product = Product::where('sku', $validated['sku'])->firstOrFail();
 
-            // cek produk tersedia di platform
             $isAvailable = $product->platforms()
                 ->where('platforms.id', $validated['platform_id'])
                 ->exists();
 
             if (!$isAvailable) {
+                DB::rollBack();
+
                 return response()->json([
-                    'message' => 'Product is not available on this platform'
+                    'message' => 'Product is not available on this platform',
                 ], 422);
             }
 
-            // cek stock
             $stock = ProductStock::where('product_id', $product->id)
                 ->where('platform_id', $validated['platform_id'])
-                ->firstOrFail();
+                ->first();
 
-            if ($stock->stock < $validated['quantity']) {
+            if (!$stock) {
+                DB::rollBack();
+
                 return response()->json([
-                    'message' => 'Insufficient stock'
+                    'message' => 'Product stock not found on this platform',
                 ], 422);
             }
 
-            // tambah sales_data
-            SalesData::create([
+            if ($stock->stock < $validated['quantity']) {
+                DB::rollBack();
+
+                return response()->json([
+                    'message' => 'Insufficient stock',
+                ], 422);
+            }
+
+            SaleData::create([
                 'buyer_email' => $validated['buyer_email'],
                 'product_id' => $product->id,
                 'platform_id' => $validated['platform_id'],
@@ -61,12 +69,10 @@ class PurchaseController extends Controller
                 'revenue' => $validated['order_value'],
             ]);
 
-            // update stock
             $stock->decrement('stock', $validated['quantity']);
 
-            // update product units_sold, revenue, trend
-            $totalUnitsSold = SalesData::where('product_id', $product->id)->sum('units_sold');
-            $totalRevenue = SalesData::where('product_id', $product->id)->sum('revenue');
+            $totalUnitsSold = SaleData::where('product_id', $product->id)->sum('units_sold');
+            $totalRevenue = SaleData::where('product_id', $product->id)->sum('revenue');
 
             $product->update([
                 'units_sold' => $totalUnitsSold,
@@ -78,23 +84,29 @@ class PurchaseController extends Controller
 
             return response()->json([
                 'message' => 'Purchase added successfully',
-                'data' => $product->fresh(['salesData', 'platforms'])
+                'data' => $product->fresh(['salesData', 'platforms', 'stocks']),
             ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Failed to add purchase',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
 
-    // helper: calculate trend berdasarkan total units sold
     private function calculateTrend($unitsSold)
     {
-        if ($unitsSold >= 100) return 'Fast Moving';
-        if ($unitsSold <= 30) return 'Slow Moving';
+        if ($unitsSold >= 100) {
+            return 'Fast Moving';
+        }
+
+        if ($unitsSold <= 30) {
+            return 'Slow Moving';
+        }
+
         return 'Normal';
     }
 }

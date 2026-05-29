@@ -14,20 +14,29 @@ class AuthController extends Controller
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
+            'password' => 'required|string|min:6',
         ]);
 
         $user = User::create([
             'nama' => $validated['nama'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
-            'role' => 'admin',
+            'role' => 'team',
             'status' => 'aktif',
         ]);
 
+        $token = $user->createToken('api-token')->plainTextToken;
+
         return response()->json([
             'message' => 'Register successful',
-            'data' => $user,
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'nama' => $user->nama,
+                'email' => $user->email,
+                'role' => $user->role,
+                'status' => $user->status,
+            ],
         ], 201);
     }
 
@@ -35,7 +44,7 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'email' => 'required|email',
-            'password' => 'required',
+            'password' => 'required|string',
         ]);
 
         $user = User::where('email', $validated['email'])->first();
@@ -46,15 +55,35 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if ($user->status !== 'aktif') {
+            return response()->json([
+                'message' => 'Your account is inactive',
+            ], 403);
+        }
+
+        $user->tokens()->delete();
+
+        $token = $user->createToken('api-token')->plainTextToken;
+
         return response()->json([
             'message' => 'Login successful',
-            'data' => [
+            'token' => $token,
+            'user' => [
                 'id' => $user->id,
                 'nama' => $user->nama,
                 'email' => $user->email,
                 'role' => $user->role,
                 'status' => $user->status,
             ],
+        ]);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'message' => 'Logout successful',
         ]);
     }
 }
