@@ -29,6 +29,9 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    Route::get('/profile', [AuthController::class, 'me']);
+    Route::put('/profile', [AuthController::class, 'updateProfile']);
+
     // Read-only routes: admin dan team boleh akses
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
@@ -40,7 +43,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/platforms/{id}', [PlatformController::class, 'show']);
 
     Route::get('/sales-insights', [SalesInsightController::class, 'index']);
+
     Route::get('/settings', [SettingController::class, 'index']);
+    Route::get('/settings/export-csv', [SettingController::class, 'exportCsv']);
 
     // Admin-only routes: team tidak boleh akses
     Route::middleware('admin')->group(function () {

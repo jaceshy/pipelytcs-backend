@@ -6,9 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
+    private function userPayload(User $user)
+    {
+        return [
+            'id' => $user->id,
+            'nama' => $user->nama,
+            'email' => $user->email,
+            'role' => $user->role,
+            'status' => $user->status,
+        ];
+    }
+
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -30,13 +42,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Register successful',
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'nama' => $user->nama,
-                'email' => $user->email,
-                'role' => $user->role,
-                'status' => $user->status,
-            ],
+            'user' => $this->userPayload($user),
         ], 201);
     }
 
@@ -68,13 +74,39 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful',
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'nama' => $user->nama,
-                'email' => $user->email,
-                'role' => $user->role,
-                'status' => $user->status,
+            'user' => $this->userPayload($user),
+        ]);
+    }
+
+    public function me(Request $request)
+    {
+        return response()->json([
+            'message' => 'Profile retrieved successfully',
+            'user' => $this->userPayload($request->user()),
+        ]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'nama' => 'required|string|max:255',
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('users', 'email')->ignore($user->id),
             ],
+        ]);
+
+        $user->update([
+            'nama' => $validated['nama'],
+            'email' => $validated['email'],
+        ]);
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'user' => $this->userPayload($user->fresh()),
         ]);
     }
 

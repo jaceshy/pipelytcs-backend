@@ -9,27 +9,26 @@ use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
-    // GET all products with platforms and stock info
     public function index()
     {
         $products = Product::with(['platforms', 'stocks'])->get();
+
         return response()->json([
             'message' => 'Products retrieved',
-            'data' => $products
+            'data' => $products,
         ]);
     }
 
-    // GET product by ID
     public function show($id)
     {
         $product = Product::with(['platforms', 'stocks'])->findOrFail($id);
+
         return response()->json([
             'message' => 'Product retrieved',
-            'data' => $product
+            'data' => $product,
         ]);
     }
 
-    // POST add new product
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -39,6 +38,8 @@ class ProductController extends Controller
             'price' => 'required|numeric|min:0',
             'stock_awal' => 'required|integer|min:0',
             'minimum_stock' => 'nullable|integer|min:0',
+            'platform_ids' => 'required|array|min:1',
+            'platform_ids.*' => 'exists:platforms,id',
         ]);
 
         DB::beginTransaction();
@@ -55,15 +56,13 @@ class ProductController extends Controller
                 'trend' => 'Normal',
             ]);
 
-            // assign to all platforms
-            $platform_ids = DB::table('platforms')->pluck('id')->toArray();
-            $product->platforms()->sync($platform_ids);
+            $platformIds = $validated['platform_ids'];
+            $product->platforms()->sync($platformIds);
 
-            // create stock for each platform
-            foreach ($platform_ids as $platform_id) {
+            foreach ($platformIds as $platformId) {
                 DB::table('product_stock')->insert([
                     'product_id' => $product->id,
-                    'platform_id' => $platform_id,
+                    'platform_id' => $platformId,
                     'stock' => $validated['stock_awal'],
                     'minimum_stock' => $validated['minimum_stock'] ?? 5,
                     'created_at' => now(),
@@ -75,19 +74,18 @@ class ProductController extends Controller
 
             return response()->json([
                 'message' => 'Product created successfully',
-                'data' => $product->load('platforms')
+                'data' => $product->fresh(['platforms', 'stocks']),
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'message' => 'Failed to create product',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
 
-    // PUT update product
     public function update(Request $request, $id)
     {
         $product = Product::findOrFail($id);
@@ -97,28 +95,87 @@ class ProductController extends Controller
             'sku' => 'required|string|max:50|unique:products,sku,' . $product->id,
             'category' => 'required|string|max:100',
             'price' => 'required|numeric|min:0',
+            'stock_awal' => 'required|integer|min:0',
+            'minimum_stock' => 'nullable|integer|min:0',
+            'platform_ids' => 'required|array|min:1',
+            'platform_ids.*' => 'exists:platforms,id',
         ]);
 
-        $product->update($validated);
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Product updated',
-            'data' => $product
-        ]);
+        try {
+            $product->update([
+                'nama_produk' => $validated['nama_produk'],
+                'sku' => $validated['sku'],
+                'category' => $validated['category'],
+                'price' => $validated['price'],
+            ]);
+
+            $platformIds = $validated['platform_ids'];
+            $product->platforms()->sync($platformIds);
+
+            DB::table('product_stock')
+                ->where('product_id', $product->id)
+                ->whereNotIn('platform_id', $platformIds)
+                ->delete();
+
+            foreach ($platformIds as $platformId) {
+                DB::table('product_stock')->updateOrInsert(
+                    [
+                        'product_id' => $product->id,
+                        'platform_id' => $platformId,
+                    ],
+                    [
+                        'stock' => $validated['stock_awal'],
+                        'minimum_stock' => $validated['minimum_stock'] ?? 5,
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Product updated successfully',
+                'data' => $product->fresh(['platforms', 'stocks']),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to update product',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
-    // DELETE product
     public function destroy($id)
     {
         $product = Product::findOrFail($id);
-        $product->delete();
 
-        return response()->json([
-            'message' => 'Product deleted'
-        ]);
+        DB::beginTransaction();
+
+        try {
+            DB::table('product_stock')->where('product_id', $product->id)->delete();
+            $product->platforms()->detach();
+            $product->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Product deleted',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to delete product',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
-    // GET products with stock <= minimum_stock
     public function lowStock()
     {
         $lowStockProducts = DB::table('product_stock')
@@ -137,7 +194,7 @@ class ProductController extends Controller
 
         return response()->json([
             'message' => 'Low stock products retrieved',
-            'data' => $lowStockProducts
+            'data' => $lowStockProducts,
         ]);
     }
 }

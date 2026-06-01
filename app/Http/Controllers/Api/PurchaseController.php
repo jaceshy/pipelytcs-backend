@@ -41,6 +41,7 @@ class PurchaseController extends Controller
 
             $stock = ProductStock::where('product_id', $product->id)
                 ->where('platform_id', $validated['platform_id'])
+                ->lockForUpdate()
                 ->first();
 
             if (!$stock) {
@@ -51,28 +52,39 @@ class PurchaseController extends Controller
                 ], 422);
             }
 
-            if ($stock->stock < $validated['quantity']) {
+            if ((int) $stock->stock < (int) $validated['quantity']) {
                 DB::rollBack();
 
                 return response()->json([
                     'message' => 'Insufficient stock',
+                    'available_stock' => (int) $stock->stock,
+                    'requested_quantity' => (int) $validated['quantity'],
                 ], 422);
             }
 
-            SaleData::create([
+            $unitPrice = $validated['quantity'] > 0
+                ? $validated['order_value'] / $validated['quantity']
+                : 0;
+
+            $saleData = SaleData::create([
                 'buyer_email' => $validated['buyer_email'],
                 'product_id' => $product->id,
                 'platform_id' => $validated['platform_id'],
                 'tanggal' => $validated['tanggal'],
                 'units_sold' => $validated['quantity'],
-                'price' => $validated['order_value'] / $validated['quantity'],
+                'price' => $unitPrice,
                 'revenue' => $validated['order_value'],
             ]);
 
-            $stock->decrement('stock', $validated['quantity']);
+            $stock->update([
+                'stock' => $stock->stock - $validated['quantity'],
+            ]);
 
-            $totalUnitsSold = SaleData::where('product_id', $product->id)->sum('units_sold');
-            $totalRevenue = SaleData::where('product_id', $product->id)->sum('revenue');
+            $totalUnitsSold = SaleData::where('product_id', $product->id)
+                ->sum('units_sold');
+
+            $totalRevenue = SaleData::where('product_id', $product->id)
+                ->sum('revenue');
 
             $product->update([
                 'units_sold' => $totalUnitsSold,
@@ -84,10 +96,12 @@ class PurchaseController extends Controller
 
             return response()->json([
                 'message' => 'Purchase added successfully',
-                'data' => $product->fresh(['salesData', 'platforms', 'stocks']),
+                'data' => [
+                    'purchase' => $saleData,
+                    'product' => $product->fresh(['salesData', 'platforms', 'stocks']),
+                ],
             ], 201);
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
 
             return response()->json([
