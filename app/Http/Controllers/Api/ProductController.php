@@ -35,9 +35,9 @@ class ProductController extends Controller
             'nama_produk' => 'required|string|max:150',
             'sku' => 'required|string|max:50|unique:products,sku',
             'category' => 'required|string|max:100',
-            'price' => 'required|numeric|min:0',
-            'stock_awal' => 'required|integer|min:0',
-            'minimum_stock' => 'nullable|integer|min:0',
+            'price' => 'required|numeric|min:1',
+            'stock_awal' => 'required|integer|min:1',
+            'minimum_stock' => 'nullable|integer|min:1',
             'platform_ids' => 'required|array|min:1',
             'platform_ids.*' => 'exists:platforms,id',
         ]);
